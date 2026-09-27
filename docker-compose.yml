@@ -1,0 +1,31 @@
+# Tự host: docker compose up -d  → mở http://localhost:3001
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Dùng Postgres đi kèm bên dưới. Muốn dùng Postgres của Supabase thì xóa dòng này
+      # và đặt DATABASE_URL trong .env.
+      DATABASE_URL: postgres://postgres:postgres@db:5432/gocnhac
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gocnhac
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gocnhac"]
+      interval: 5s
+      timeout: 3s
+      retries: 20

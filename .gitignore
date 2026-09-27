@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+data/
+*.log
+.vercel/
+supabase/.temp/
+supabase/.branches/
+.smoke-cache/

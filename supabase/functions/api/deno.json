@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "hono": "npm:hono@4.13.9",
+    "hono/": "npm:/hono@4.13.9/",
+    "youtubei.js": "npm:youtubei.js@18.1.0",
+    "postgres": "npm:postgres@3.4.9"
+  }
+}
