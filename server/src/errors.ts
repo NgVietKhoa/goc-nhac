@@ -36,7 +36,7 @@ export function playabilityError(status: string | undefined, reason: string | un
   if (r.includes('bot') || r.includes('robot')) {
     return new AppError(
       'BOT_CHECK',
-      'YouTube đang chặn máy chủ vì nghi là bot. Hãy đặt YT_PO_TOKEN và YT_VISITOR_DATA (xem README).',
+      'YouTube đang chặn IP máy chủ vì nghi là bot. Hãy đặt YT_PROXY (hoặc YT_PO_TOKEN + YT_VISITOR_DATA), xem README mục 6.',
       403,
     );
   }
