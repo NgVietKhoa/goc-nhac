@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router';
 import { api } from '../lib/api.ts';
-import { useLibrary } from '../store/library.ts';
+import { usePlaylists } from '../store/library.ts';
+import { useUi } from '../store/ui.ts';
 import { Icon, Logo, type IconName } from './Icon.tsx';
 import { PlaylistMosaic } from './TrackMenu.tsx';
 
@@ -17,7 +18,8 @@ export async function lockApp(): Promise<void> {
 }
 
 export function Sidebar() {
-  const playlists = useLibrary((s) => s.playlists);
+  const playlists = usePlaylists();
+  const authRequired = useUi((s) => s.authRequired);
   const navigate = useNavigate();
 
   const create = () => navigate('/library?tao=1');
@@ -72,10 +74,12 @@ export function Sidebar() {
         </div>
       </div>
 
-      <button type="button" onClick={() => void lockApp()} className="flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm font-medium text-muted hover:text-ink">
-        <Icon name="lock" size={20} />
-        Khóa ứng dụng
-      </button>
+      {authRequired && (
+        <button type="button" onClick={() => void lockApp()} className="flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm font-medium text-muted hover:text-ink">
+          <Icon name="lock" size={20} />
+          Khóa ứng dụng
+        </button>
+      )}
     </nav>
   );
 }

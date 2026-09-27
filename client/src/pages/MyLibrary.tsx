@@ -1,29 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { CollectionActions, CollectionHeader, HeaderSkeleton } from '../components/CollectionHeader.tsx';
+import { CollectionActions, CollectionHeader } from '../components/CollectionHeader.tsx';
 import { Icon } from '../components/Icon.tsx';
-import { TrackList, TrackListSkeleton } from '../components/TrackList.tsx';
+import { TrackList } from '../components/TrackList.tsx';
 import { PlaylistMosaic } from '../components/TrackMenu.tsx';
-import { EmptyState, ErrorState } from '../components/ui.tsx';
-import { api } from '../lib/api.ts';
+import { EmptyState } from '../components/ui.tsx';
 import { dayLabel, formatDate, formatTotal } from '../lib/format.ts';
-import { useAsync } from '../lib/hooks.ts';
-import { useLibrary } from '../store/library.ts';
+import { useLibrary, usePlaylistDetail, usePlaylists } from '../store/library.ts';
 import { usePlayer } from '../store/player.ts';
 import { toast, toastError } from '../store/toast.ts';
-import type { HistoryEntry, MyPlaylistDetail } from '../types.ts';
+import type { HistoryEntry } from '../types.ts';
 
 // ---------- Bài hát đã thích ----------
 
 export function LikesPage() {
-  const version = useLibrary((s) => s.version);
-  const liked = useLibrary((s) => s.liked);
-  const { data, error, loading, reload } = useAsync(() => api.likes(), [version]);
-  if (error) return <ErrorState error={error} onRetry={reload} />;
-  // Ẩn ngay bài vừa bỏ thích mà không chờ tải lại.
-  const tracks = (data ?? []).filter((t) => liked.has(t.videoId));
+  const likes = useLibrary((s) => s.likes);
   const context = { kind: 'Đang phát từ', label: 'Bài hát đã thích', href: '/likes' };
-  const total = tracks.reduce((s, t) => s + (t.durationSec ?? 0), 0);
+  const total = likes.reduce((s, t) => s + (t.durationSec ?? 0), 0);
   return (
     <div className="flex flex-col gap-7">
       <CollectionHeader
@@ -34,17 +27,15 @@ export function LikesPage() {
             <Icon name="heartFill" size={72} />
           </span>
         }
-        meta={loading && !data ? 'Đang tải…' : [`${tracks.length} bài`, total ? formatTotal(total) : ''].filter(Boolean).join(' · ')}
+        meta={[`${likes.length} bài`, total ? formatTotal(total) : ''].filter(Boolean).join(' · ')}
       />
-      <CollectionActions tracks={tracks} context={context} />
-      {loading && !data ? (
-        <TrackListSkeleton />
-      ) : tracks.length === 0 ? (
+      <CollectionActions tracks={likes} context={context} />
+      {likes.length === 0 ? (
         <EmptyState icon="heart" title="Chưa có bài hát nào">
           Bấm vào hình trái tim (hoặc phím L) để lưu bài bạn thích vào đây.
         </EmptyState>
       ) : (
-        <TrackList tracks={tracks.map((t) => ({ ...t, addedAt: t.likedAt }))} context={context} showAlbum showAdded />
+        <TrackList tracks={likes.map((t) => ({ ...t, addedAt: t.likedAt }))} context={context} showAlbum showAdded />
       )}
     </div>
   );
@@ -56,61 +47,25 @@ export function MyPlaylistPage() {
   const { id: rawId = '' } = useParams();
   const id = Number(rawId);
   const navigate = useNavigate();
-  const version = useLibrary((s) => s.version);
-  const { data, error, loading, reload, setData } = useAsync(() => api.myPlaylist(id), [id, version]);
+  const data = usePlaylistDetail(id);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
 
-  if (error) return <ErrorState error={error} onRetry={reload} />;
-  if (loading && !data) {
-    return (
-      <div className="flex flex-col gap-8">
-        <HeaderSkeleton />
-        <TrackListSkeleton />
-      </div>
-    );
-  }
-  if (!data) return null;
+  if (!data) return <EmptyState icon="music" title="Không tìm thấy playlist">Playlist có thể đã bị xóa.</EmptyState>;
   const context = { kind: 'Đang phát từ playlist', label: data.name, href: `/me/playlist/${id}` };
 
-  const rename = async (e: React.FormEvent) => {
+  const rename = (e: React.FormEvent) => {
     e.preventDefault();
     const next = name.trim();
     setEditing(false);
-    if (!next || next === data.name) return;
-    try {
-      await api.updatePlaylist(id, { name: next });
-      setData((d) => d && { ...d, name: next });
-      await useLibrary.getState().refreshPlaylists();
-    } catch (err) {
-      toastError(err);
-    }
+    if (next && next !== data.name) useLibrary.getState().renamePlaylist(id, next);
   };
 
-  const remove = async () => {
+  const remove = () => {
     if (!window.confirm(`Xóa playlist “${data.name}”? Không thể hoàn tác.`)) return;
-    try {
-      await api.deletePlaylist(id);
-      await useLibrary.getState().refreshPlaylists();
-      toast.info(`Đã xóa playlist “${data.name}”`);
-      navigate('/library');
-    } catch (err) {
-      toastError(err);
-    }
-  };
-
-  const reorder = async (videoIds: string[]) => {
-    const before = data;
-    const byId = new Map(data.tracks.map((t) => [t.videoId, t]));
-    const tracks = videoIds.map((v) => byId.get(v)).filter((t): t is MyPlaylistDetail['tracks'][number] => !!t);
-    setData((d) => d && { ...d, tracks, covers: tracks.slice(0, 4).flatMap((t) => (t.thumbnail ? [t.thumbnail] : [])) });
-    try {
-      await api.reorderPlaylist(id, videoIds);
-      void useLibrary.getState().refreshPlaylists();
-    } catch (err) {
-      setData(() => before);
-      toastError(err);
-    }
+    useLibrary.getState().deletePlaylist(id);
+    toast.info(`Đã xóa playlist “${data.name}”`);
+    navigate('/library');
   };
 
   return (
@@ -157,7 +112,7 @@ export function MyPlaylistPage() {
           >
             <Icon name="pencil" size={22} />
           </button>
-          <button type="button" aria-label="Xóa playlist" title="Xóa playlist" onClick={() => void remove()} className="flex h-12 w-12 items-center justify-center rounded-full text-muted hover:text-danger">
+          <button type="button" aria-label="Xóa playlist" title="Xóa playlist" onClick={remove} className="flex h-12 w-12 items-center justify-center rounded-full text-muted hover:text-danger">
             <Icon name="trash" size={22} />
           </button>
         </CollectionActions>
@@ -167,7 +122,14 @@ export function MyPlaylistPage() {
           Tìm bài hát rồi chọn “Thêm vào playlist” trong menu “…” hoặc chuột phải.
         </EmptyState>
       ) : (
-        <TrackList tracks={data.tracks} context={context} showAlbum showAdded playlistId={id} onReorder={(ids) => void reorder(ids)} />
+        <TrackList
+          tracks={data.tracks}
+          context={context}
+          showAlbum
+          showAdded
+          playlistId={id}
+          onReorder={(ids) => useLibrary.getState().reorderPlaylist(id, ids)}
+        />
       )}
     </div>
   );
@@ -184,12 +146,12 @@ function CreatePlaylistForm({ autoFocus }: { autoFocus: boolean }) {
   }, [autoFocus]);
   return (
     <form
-      onSubmit={async (e) => {
+      onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        const created = await useLibrary.getState().createPlaylist(name.trim());
+        const created = useLibrary.getState().createPlaylist(name.trim());
         setName('');
-        if (created) navigate(`/me/playlist/${created.id}`);
+        navigate(`/me/playlist/${created.id}`);
       }}
       className="flex max-w-md gap-2"
     >
@@ -212,40 +174,15 @@ function CreatePlaylistForm({ autoFocus }: { autoFocus: boolean }) {
   );
 }
 
+const PAGE = 50;
+
 function History() {
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [done, setDone] = useState(false);
-  const { error, loading, reload } = useAsync(async () => {
-    const first = await api.history();
-    setEntries(first);
-    setDone(first.length < 50);
-    return first;
-  }, []);
+  const history = useLibrary((s) => s.history);
+  const [shown, setShown] = useState(PAGE);
   const playTracks = usePlayer((s) => s.playTracks);
+  const entries = history.slice(0, shown);
 
-  const more = async () => {
-    try {
-      const next = await api.history(entries[entries.length - 1]?.id);
-      setEntries((e) => [...e, ...next]);
-      setDone(next.length < 50);
-    } catch (err) {
-      toastError(err);
-    }
-  };
-
-  const clear = async () => {
-    if (!window.confirm('Xóa toàn bộ lịch sử nghe?')) return;
-    try {
-      await api.clearHistory();
-      setEntries([]);
-    } catch (err) {
-      toastError(err);
-    }
-  };
-
-  if (error) return <ErrorState error={error} onRetry={reload} />;
-  if (loading && entries.length === 0) return <TrackListSkeleton rows={6} />;
-  if (entries.length === 0) {
+  if (history.length === 0) {
     return (
       <EmptyState icon="clock" title="Chưa có lịch sử nghe">
         Bài bạn nghe quá 30 giây sẽ được ghi lại ở đây.
@@ -266,26 +203,27 @@ function History() {
       {groups.map((g) => (
         <section key={g.label} className="flex flex-col gap-2">
           <h3 className="px-2 text-sm font-semibold capitalize text-muted">{g.label}</h3>
-          <TrackList
-            tracks={g.items.map((e) => e.track)}
-            context={{ kind: 'Đang phát từ', label: 'Lịch sử nghe' }}
-          />
+          <TrackList tracks={g.items.map((e) => e.track)} context={{ kind: 'Đang phát từ', label: 'Lịch sử nghe' }} />
         </section>
       ))}
-      <div className="flex gap-3">
-        {!done && (
-          <button type="button" onClick={() => void more()} className="h-10 rounded-full border border-s4 px-4 text-sm font-semibold hover:border-ink">
+      <div className="flex flex-wrap gap-3">
+        {shown < history.length && (
+          <button type="button" onClick={() => setShown((n) => n + PAGE)} className="h-10 rounded-full border border-s4 px-4 text-sm font-semibold hover:border-ink">
             Xem thêm
           </button>
         )}
         <button
           type="button"
-          onClick={() => playTracks(entries.map((e) => e.track), 0, { kind: 'Đang phát từ', label: 'Lịch sử nghe' })}
+          onClick={() => playTracks(history.map((e) => e.track), 0, { kind: 'Đang phát từ', label: 'Lịch sử nghe' })}
           className="h-10 rounded-full px-4 text-sm font-semibold text-muted hover:text-ink"
         >
           Phát lại tất cả
         </button>
-        <button type="button" onClick={() => void clear()} className="h-10 rounded-full px-4 text-sm font-semibold text-muted hover:text-danger">
+        <button
+          type="button"
+          onClick={() => window.confirm('Xóa toàn bộ lịch sử nghe?') && useLibrary.getState().clearHistory()}
+          className="h-10 rounded-full px-4 text-sm font-semibold text-muted hover:text-danger"
+        >
           Xóa lịch sử
         </button>
       </div>
@@ -293,12 +231,64 @@ function History() {
   );
 }
 
+/** Sao lưu / khôi phục vì dữ liệu chỉ nằm trong trình duyệt này. */
+function Backup() {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const exportFile = () => {
+    const blob = new Blob([useLibrary.getState().exportData()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `goc-nhac-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFile = async (file: File) => {
+    if (!window.confirm('Khôi phục sẽ THAY THẾ toàn bộ playlist, bài đã thích và lịch sử hiện tại. Tiếp tục?')) return;
+    try {
+      useLibrary.getState().importData(await file.text());
+      toast.info('Đã khôi phục dữ liệu từ file sao lưu');
+    } catch (err) {
+      toastError(err, 'File sao lưu không hợp lệ.');
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-2 rounded-xl border border-line-strong bg-s1 p-4">
+      <span className="text-sm font-semibold">Sao lưu dữ liệu</span>
+      <span className="text-xs leading-relaxed text-muted">
+        Playlist, bài đã thích và lịch sử chỉ được lưu trong trình duyệt này. Xuất ra file để giữ lại, hoặc chuyển sang máy khác.
+      </span>
+      <div className="mt-1 flex gap-2">
+        <button type="button" onClick={exportFile} className="flex h-9 items-center gap-1.5 rounded-full border border-s4 px-4 text-sm font-semibold hover:border-ink">
+          <Icon name="save" size={16} /> Xuất file
+        </button>
+        <button type="button" onClick={() => fileRef.current?.click()} className="h-9 rounded-full px-4 text-sm font-semibold text-muted hover:text-ink">
+          Nhập từ file
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void importFile(file);
+          }}
+        />
+      </div>
+    </section>
+  );
+}
+
 export function LibraryPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'lich-su' ? 'history' : 'playlists';
-  const playlists = useLibrary((s) => s.playlists);
-  const loaded = useLibrary((s) => s.playlistsLoaded);
-  const likedCount = useLibrary((s) => s.liked.size);
+  const playlists = usePlaylists();
+  const likedCount = useLibrary((s) => s.likes.length);
 
   return (
     <div className="flex flex-col gap-6">
@@ -344,7 +334,8 @@ export function LibraryPage() {
               </Link>
             ))}
           </div>
-          {loaded && playlists.length === 0 && <p className="text-sm text-muted">Bạn chưa tạo playlist nào. Đặt tên ở ô phía trên để bắt đầu.</p>}
+          {playlists.length === 0 && <p className="text-sm text-muted">Bạn chưa tạo playlist nào. Đặt tên ở ô phía trên để bắt đầu.</p>}
+          <Backup />
         </div>
       )}
     </div>

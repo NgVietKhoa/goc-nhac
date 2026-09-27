@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
-import * as repo from './db/repos.ts';
-import { isDeno } from './env.ts';
+import { authEnabled } from './env.ts';
 import { AppError, badRequest } from './errors.ts';
 import { endSession, hasSession, passwordMatches, rateLimit, startSession } from './middleware.ts';
 import * as v from './validate.ts';
@@ -21,6 +20,7 @@ async function jsonBody(req: { json(): Promise<unknown> }): Promise<Record<strin
 
 export const auth = new Hono()
   .post('/login', rateLimit('login', 5), rateLimit('login-all', 20, 60_000, false), async (c) => {
+    if (!authEnabled()) return c.json({ ok: true });
     const body = await jsonBody(c.req);
     if (typeof body.password !== 'string' || !(await passwordMatches(body.password))) {
       throw new AppError('WRONG_PASSWORD', 'Sai mật khẩu, bạn thử lại nhé.', 401);
@@ -32,7 +32,7 @@ export const auth = new Hono()
     endSession(c);
     return c.json({ ok: true });
   })
-  .get('/me', async (c) => c.json({ authenticated: await hasSession(c) }));
+  .get('/me', async (c) => c.json({ authRequired: authEnabled(), authenticated: await hasSession(c) }));
 
 // ---------- Dữ liệu YouTube Music ----------
 
@@ -82,9 +82,7 @@ export const music = new Hono()
   .get('/stream/:videoId', rateLimit('stream', 120), async (c) => {
     const id = v.videoId(c.req.param('videoId'));
     const pref: AudioPref = c.req.query('format') === 'm4a' ? 'm4a' : 'opus';
-    // Trên Supabase Edge: lần decipher đầu trả 307 để việc stream chạy trong request riêng (xem proxyStream).
-    const again = isDeno && c.req.query('r') !== '1' ? `?format=${pref}&r=1` : undefined;
-    return proxyStream(id, pref, c.req.header('range'), again);
+    return proxyStream(id, pref, c.req.header('range'));
   })
   .get('/image', async (c) => {
     // Proxy ảnh bìa để trình duyệt đọc được pixel (lấy màu chủ đạo) mà không vướng CORS.
@@ -110,79 +108,4 @@ export const music = new Hono()
     return new Response(res.body, {
       headers: { 'content-type': type, 'cache-control': 'private, max-age=86400' },
     });
-  });
-
-// ---------- Dữ liệu cá nhân ----------
-
-const id = (raw: string | undefined) => v.positiveInt(raw, 'Mã playlist');
-
-export const me = new Hono()
-  .get('/playlists', async (c) => c.json(await repo.listPlaylists()))
-  .post('/playlists', async (c) => {
-    const body = await jsonBody(c.req);
-    const playlist = await repo.createPlaylist(
-      v.playlistName(body.name),
-      typeof body.description === 'string' ? body.description.slice(0, 500) : undefined,
-    );
-    if (body.tracks !== undefined) await repo.addToPlaylist(playlist.id, v.trackList(body.tracks));
-    return c.json(await repo.getPlaylist(playlist.id), 201);
-  })
-  .get('/playlists/:id', async (c) => c.json(await repo.getPlaylist(id(c.req.param('id')))))
-  .patch('/playlists/:id', async (c) => {
-    const body = await jsonBody(c.req);
-    const patch: { name?: string; description?: string | null } = {};
-    if (body.name !== undefined) patch.name = v.playlistName(body.name);
-    if (body.description !== undefined) {
-      patch.description = typeof body.description === 'string' && body.description.trim() ? body.description.slice(0, 500) : null;
-    }
-    return c.json(await repo.updatePlaylist(id(c.req.param('id')), patch));
-  })
-  .delete('/playlists/:id', async (c) => {
-    await repo.deletePlaylist(id(c.req.param('id')));
-    return c.body(null, 204);
-  })
-  .post('/playlists/:id/tracks', async (c) => {
-    const body = await jsonBody(c.req);
-    const tracks = body.tracks !== undefined ? v.trackList(body.tracks) : [v.track(body.track)];
-    const added = await repo.addToPlaylist(id(c.req.param('id')), tracks);
-    return c.json({ added, skipped: tracks.length - added });
-  })
-  .delete('/playlists/:id/tracks/:videoId', async (c) => {
-    await repo.removeFromPlaylist(id(c.req.param('id')), v.videoId(c.req.param('videoId')));
-    return c.body(null, 204);
-  })
-  .put('/playlists/:id/order', async (c) => {
-    const body = await jsonBody(c.req);
-    if (!Array.isArray(body.videoIds)) throw badRequest('Thiếu danh sách videoIds.');
-    const ids = body.videoIds.map((x) => v.videoId(typeof x === 'string' ? x : undefined));
-    await repo.reorderPlaylist(id(c.req.param('id')), ids);
-    return c.body(null, 204);
-  })
-  .get('/likes', async (c) => c.json(await repo.listLikes()))
-  .put('/likes/:videoId', async (c) => {
-    const body = await jsonBody(c.req);
-    const track = v.track(body.track);
-    if (track.videoId !== c.req.param('videoId')) throw badRequest('Mã bài hát không khớp.');
-    await repo.like(track);
-    return c.body(null, 204);
-  })
-  .delete('/likes/:videoId', async (c) => {
-    await repo.unlike(v.videoId(c.req.param('videoId')));
-    return c.body(null, 204);
-  })
-  .get('/history', async (c) => {
-    const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
-    const before = c.req.query('before') ? v.positiveInt(c.req.query('before'), 'before') : undefined;
-    return c.json(await repo.listHistory(limit, before));
-  })
-  .post('/history', async (c) => {
-    const body = await jsonBody(c.req);
-    const listened = typeof body.listenedSec === 'number' ? Math.round(body.listenedSec) : NaN;
-    if (!Number.isFinite(listened) || listened < 30) throw badRequest('Chỉ ghi lịch sử khi đã nghe quá 30 giây.');
-    await repo.addHistory(v.track(body.track), Math.min(listened, 86_400));
-    return c.body(null, 204);
-  })
-  .delete('/history', async (c) => {
-    await repo.clearHistory();
-    return c.body(null, 204);
   });

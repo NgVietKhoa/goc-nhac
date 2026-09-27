@@ -5,13 +5,11 @@
   "scripts": {
     "dev": "node --env-file=../.env --watch --import tsx node.ts",
     "start": "node --import tsx node.ts",
-    "typecheck": "tsc --noEmit",
-    "migrate": "node --env-file=../.env --import tsx migrate.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.9",
-    "postgres": "^3.4.9",
     "tsx": "^4.23.15",
     "undici": "^6.29.0",
     "youtubei.js": "^18.1.0"

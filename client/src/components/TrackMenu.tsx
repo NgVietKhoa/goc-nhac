@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api } from '../lib/api.ts';
-import { useLibrary } from '../store/library.ts';
+import { useLibrary, usePlaylists } from '../store/library.ts';
 import { usePlayer } from '../store/player.ts';
 import { toast, toastError } from '../store/toast.ts';
 import { useUi } from '../store/ui.ts';
@@ -21,7 +21,7 @@ export function TrackMenu() {
   const menu = useUi((s) => s.menu);
   const close = useUi((s) => s.closeMenu);
   const openAdd = useUi((s) => s.openAddToPlaylist);
-  const liked = useLibrary((s) => (menu ? s.liked.has(menu.track.videoId) : false));
+  const liked = useLibrary((s) => (menu ? Boolean(s.likedIds[menu.track.videoId]) : false));
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
@@ -61,7 +61,7 @@ export function TrackMenu() {
     { label: 'Phát tiếp theo', run: () => { player.playNext([track]); toast.info(`Sẽ phát “${track.title}” tiếp theo`); } },
     { label: 'Thêm vào hàng đợi', run: () => { player.addToQueue([track]); toast.info(`Đã thêm “${track.title}” vào hàng đợi`); } },
     { label: 'Thêm vào playlist', hint: '›', run: () => openAdd([track]) },
-    { label: liked ? 'Bỏ thích' : 'Thích', hint: 'L', run: () => void useLibrary.getState().toggleLike(track) },
+    { label: liked ? 'Bỏ thích' : 'Thích', hint: 'L', run: () => useLibrary.getState().toggleLike(track) },
     {
       label: 'Phát radio từ bài này',
       run: async () => {
@@ -82,15 +82,9 @@ export function TrackMenu() {
     items.push({
       label: 'Xóa khỏi playlist này',
       danger: true,
-      run: async () => {
-        try {
-          await api.removeFromPlaylist(playlistId, track.videoId);
-          await useLibrary.getState().refreshPlaylists();
-          useLibrary.getState().bump();
-          toast.info(`Đã xóa “${track.title}” khỏi playlist`);
-        } catch (err) {
-          toastError(err);
-        }
+      run: () => {
+        useLibrary.getState().removeFromPlaylist(playlistId, track.videoId);
+        toast.info(`Đã xóa “${track.title}” khỏi playlist`);
       },
     });
   }
@@ -151,9 +145,8 @@ export function TrackMenu() {
 export function AddToPlaylistDialog() {
   const tracks = useUi((s) => s.addToPlaylist);
   const close = useUi((s) => s.closeAddToPlaylist);
-  const playlists = useLibrary((s) => s.playlists);
+  const playlists = usePlaylists();
   const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -166,12 +159,10 @@ export function AddToPlaylistDialog() {
   if (!tracks) return null;
   const title = tracks.length === 1 ? `“${tracks[0].title}”` : `${tracks.length} bài`;
 
-  const create = async (e: React.FormEvent) => {
+  const create = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || busy) return;
-    setBusy(true);
-    await useLibrary.getState().createPlaylist(name.trim(), tracks);
-    setBusy(false);
+    if (!name.trim()) return;
+    useLibrary.getState().createPlaylist(name.trim(), tracks);
     close();
   };
 
@@ -206,7 +197,7 @@ export function AddToPlaylistDialog() {
             placeholder="Tạo playlist mới…"
             className="h-11 min-w-0 flex-1 rounded-lg border border-s4 bg-bg px-3 text-[15px] outline-none placeholder:text-dim focus:border-accent"
           />
-          <button type="submit" disabled={!name.trim() || busy} className="h-11 rounded-lg bg-accent px-4 text-sm font-bold text-accent-ink disabled:opacity-40">
+          <button type="submit" disabled={!name.trim()} className="h-11 rounded-lg bg-accent px-4 text-sm font-bold text-accent-ink disabled:opacity-40">
             Tạo
           </button>
         </form>
@@ -218,7 +209,7 @@ export function AddToPlaylistDialog() {
               type="button"
               onClick={() => {
                 close();
-                void useLibrary.getState().addToPlaylist(p, tracks);
+                useLibrary.getState().addToPlaylist(p, tracks);
               }}
               className="flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-s3"
             >

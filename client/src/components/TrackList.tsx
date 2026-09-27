@@ -78,7 +78,7 @@ function TrackRow({ track, index, props, layout, onPlay, handle, style, setRef, 
   const isCurrent = usePlayer((s) => currentItem(s)?.track.videoId === track.videoId);
   const playing = usePlayer((s) => s.playing);
   const failed = usePlayback((s) => s.failed[track.videoId]);
-  const liked = useLibrary((s) => s.liked.has(track.videoId));
+  const liked = useLibrary((s) => Boolean(s.likedIds[track.videoId]));
   const toggleLike = useLibrary((s) => s.toggleLike);
   const { numbered, showCover = true, showAlbum, showAdded, playlistId } = props;
 

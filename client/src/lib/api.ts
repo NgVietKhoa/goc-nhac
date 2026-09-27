@@ -1,12 +1,8 @@
 import type {
   Album,
   Artist,
-  HistoryEntry,
   HomeFeed,
-  LikedTrack,
   Lyrics,
-  MyPlaylist,
-  MyPlaylistDetail,
   Playlist,
   SearchResult,
   SearchSuggestions,
@@ -64,7 +60,7 @@ const enc = encodeURIComponent;
 
 export const api = {
   // Đăng nhập
-  me: () => get<{ authenticated: boolean }>('/auth/me'),
+  me: () => get<{ authRequired: boolean; authenticated: boolean }>('/auth/me'),
   login: (password: string) => request<{ ok: true }>('POST', '/auth/login', { password }),
   logout: () => request<{ ok: true }>('POST', '/auth/logout'),
 
@@ -79,24 +75,6 @@ export const api = {
   artist: (id: string) => get<Artist>(`/artist/${enc(id)}`),
   playlist: (id: string) => get<Playlist>(`/playlist/${enc(id)}`),
   home: (filter?: string) => get<HomeFeed>(filter ? `/home?filter=${enc(filter)}` : '/home'),
-
-  // Dữ liệu cá nhân
-  playlists: () => get<MyPlaylist[]>('/me/playlists'),
-  myPlaylist: (id: number) => get<MyPlaylistDetail>(`/me/playlists/${id}`),
-  createPlaylist: (name: string, tracks?: Track[]) => request<MyPlaylistDetail>('POST', '/me/playlists', { name, tracks }),
-  updatePlaylist: (id: number, patch: { name?: string; description?: string | null }) =>
-    request<MyPlaylist>('PATCH', `/me/playlists/${id}`, patch),
-  deletePlaylist: (id: number) => request<void>('DELETE', `/me/playlists/${id}`),
-  addToPlaylist: (id: number, tracks: Track[]) =>
-    request<{ added: number; skipped: number }>('POST', `/me/playlists/${id}/tracks`, { tracks }),
-  removeFromPlaylist: (id: number, videoId: string) => request<void>('DELETE', `/me/playlists/${id}/tracks/${videoId}`),
-  reorderPlaylist: (id: number, videoIds: string[]) => request<void>('PUT', `/me/playlists/${id}/order`, { videoIds }),
-  likes: () => get<LikedTrack[]>('/me/likes'),
-  like: (track: Track) => request<void>('PUT', `/me/likes/${track.videoId}`, { track }),
-  unlike: (id: string) => request<void>('DELETE', `/me/likes/${id}`),
-  history: (before?: number) => get<HistoryEntry[]>(`/me/history?limit=50${before ? `&before=${before}` : ''}`),
-  addHistory: (track: Track, listenedSec: number) => request<void>('POST', '/me/history', { track, listenedSec }),
-  clearHistory: () => request<void>('DELETE', '/me/history'),
 };
 
 /** Định dạng audio trình duyệt phát tốt: Safari/iOS phát opus trong webm không ổn định nên dùng m4a. */

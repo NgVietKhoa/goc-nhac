@@ -16,5 +16,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["*.ts", "../supabase/functions/api/src/**/*.ts"]
+  "include": ["*.ts", "src/**/*.ts"]
 }

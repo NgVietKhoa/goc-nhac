@@ -135,8 +135,8 @@ export function YtPlaylistPage() {
   }
   const context = { kind: 'Đang phát từ playlist', label: data.title, href: `/playlist/${id}` };
   const save = async () => {
-    const created = await useLibrary.getState().createPlaylist(data.title, data.tracks.slice(0, 500));
-    if (created) navigate(`/me/playlist/${created.id}`);
+    const created = useLibrary.getState().createPlaylist(data.title, data.tracks.slice(0, 500));
+    navigate(`/me/playlist/${created.id}`);
   };
   return (
     <div className="flex flex-col gap-7">

@@ -86,7 +86,7 @@ export function VolumeControl() {
 }
 
 export function LikeButton({ track, size = 20, className = '' }: { track: Track | undefined; size?: number; className?: string }) {
-  const liked = useLibrary((s) => (track ? s.liked.has(track.videoId) : false));
+  const liked = useLibrary((s) => (track ? Boolean(s.likedIds[track.videoId]) : false));
   const toggle = useLibrary((s) => s.toggleLike);
   if (!track) return null;
   return (

@@ -1,4 +1,4 @@
-# Tự host toàn bộ app (API + giao diện) bằng Node — phương án dự phòng cho Supabase + Vercel.
+# Tự host toàn bộ app (API + giao diện) bằng Node — phương án dự phòng cho Vercel.
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -19,7 +19,6 @@ COPY client/package.json client/
 COPY server/package.json server/
 RUN npm ci --omit=dev -w server --include-workspace-root=false && npm cache clean --force
 COPY server server
-COPY supabase supabase
 COPY --from=build /app/client/dist client/dist
 VOLUME /app/data
 EXPOSE 3001

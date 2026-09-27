@@ -17,7 +17,6 @@ import { HomePage } from './pages/Home.tsx';
 import { LoginPage } from './pages/Login.tsx';
 import { LibraryPage, LikesPage, MyPlaylistPage } from './pages/MyLibrary.tsx';
 import { SearchPage } from './pages/Search.tsx';
-import { useLibrary } from './store/library.ts';
 import { useUi } from './store/ui.ts';
 
 let engineStarted = false;
@@ -34,7 +33,6 @@ function Shell() {
       engineStarted = true;
       engine.init();
     }
-    void useLibrary.getState().load();
   }, []);
 
   // Về đầu trang khi chuyển trang.
@@ -84,8 +82,12 @@ export function App() {
     setUnauthorizedHandler(() => setAuth('out'));
     api
       .me()
-      .then((r) => setAuth(r.authenticated ? 'in' : 'out'))
-      .catch(() => setAuth('out'));
+      .then((r) => {
+        useUi.setState({ authRequired: r.authRequired });
+        setAuth(r.authenticated ? 'in' : 'out');
+      })
+      // Không hỏi được server thì vẫn mở app; từng trang sẽ tự báo lỗi.
+      .catch(() => setAuth('in'));
   }, []);
 
   if (auth === 'checking') {

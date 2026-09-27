@@ -1,16 +1,13 @@
-// Chạy API trên Node: dùng cho dev local, hoặc tự host bằng Docker thay cho Supabase Edge Function.
+// Chạy API trên Node: dùng cho dev local, hoặc tự host bằng Docker thay cho Vercel.
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { existsSync } from 'node:fs';
 import { Hono } from 'hono';
-import { createApp } from '../supabase/functions/api/src/app.ts';
-import { getPlayerYT, getYT } from '../supabase/functions/api/src/youtube/client.ts';
-import { migrate } from './migrate.ts';
+import { createApp } from './src/app.ts';
+import { getPlayerYT, getYT } from './src/youtube/client.ts';
 
 const port = Number(process.env.PORT ?? 3001);
 const staticDir = process.env.STATIC_DIR; // vd ../client/dist khi chạy production
-
-await migrate();
 
 const root = new Hono();
 root.route('/', createApp());

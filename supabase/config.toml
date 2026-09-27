@@ -1,7 +1,0 @@
-# Cấu hình Supabase CLI cho Góc Nhạc.
-project_id = "goc-nhac"
-
-[functions.api]
-# App tự kiểm tra đăng nhập bằng cookie riêng, không dùng JWT của Supabase
-# (thẻ <audio> không gửi được header Authorization).
-verify_jwt = false

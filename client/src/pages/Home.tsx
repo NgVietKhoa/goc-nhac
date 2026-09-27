@@ -8,11 +8,12 @@ import { Chip, ErrorState, Skeleton } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
 import { greeting } from '../lib/format.ts';
 import { useAsync } from '../lib/hooks.ts';
-import { useLibrary } from '../store/library.ts';
+import { useLibrary, usePlaylists } from '../store/library.ts';
+import { useUi } from '../store/ui.ts';
 
 function QuickLinks() {
-  const playlists = useLibrary((s) => s.playlists);
-  const likedCount = useLibrary((s) => s.liked.size);
+  const playlists = usePlaylists();
+  const likedCount = useLibrary((s) => s.likes.length);
   const items = [
     { to: '/likes', name: 'Bài hát đã thích', art: <span className="flex h-16 w-16 shrink-0 items-center justify-center bg-gradient-to-br from-[#8a6a2f] to-[#4a3f6b]"><Icon name="heartFill" size={24} /></span>, show: likedCount > 0 },
     ...playlists.slice(0, 5).map((p) => ({ to: `/me/playlist/${p.id}`, name: p.name, art: <PlaylistMosaic covers={p.covers} size={64} className="!rounded-none" />, show: true })),
@@ -33,6 +34,7 @@ function QuickLinks() {
 export function HomePage() {
   const [filter, setFilter] = useState<string>();
   const { data, error, loading, reload } = useAsync(() => api.home(filter), [filter]);
+  const authRequired = useUi((s) => s.authRequired);
   const filters = data?.filters ?? [];
 
   return (
@@ -48,9 +50,11 @@ export function HomePage() {
           <Icon name="search" size={18} />
           Bạn muốn nghe gì?
         </Link>
-        <button type="button" aria-label="Khóa ứng dụng" onClick={() => void lockApp()} className="flex h-10 w-10 items-center justify-center text-muted md:hidden">
-          <Icon name="lock" size={20} />
-        </button>
+        {authRequired && (
+          <button type="button" aria-label="Khóa ứng dụng" onClick={() => void lockApp()} className="flex h-10 w-10 items-center justify-center text-muted md:hidden">
+            <Icon name="lock" size={20} />
+          </button>
+        )}
       </div>
 
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 no-scrollbar md:mx-0 md:px-0">

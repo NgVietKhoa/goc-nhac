@@ -1,10 +1,8 @@
-node_modules/
-dist/
+*.log
 .env
 .env.local
-data/
-*.log
-.vercel/
-supabase/.temp/
-supabase/.branches/
 .smoke-cache/
+.vercel/
+data/
+dist/
+node_modules/

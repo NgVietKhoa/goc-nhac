@@ -1,8 +1,7 @@
 // Lấy URL audio đã decipher và proxy về client, hỗ trợ Range để tua.
 import type { Misc, Types } from 'youtubei.js';
-import { deleteStreamCache, getStreamCache, setStreamCache, type CachedStream } from '../db/repos.ts';
 import { AppError, playabilityError } from '../errors.ts';
-import { config } from '../env.ts';
+import { config, isVercel } from '../env.ts';
 import { TtlCache } from '../lib/ttlCache.ts';
 import { youtubeFetch } from '../lib/proxyFetch.ts';
 import { getPlayerYT, resetYT } from './client.ts';
@@ -12,11 +11,22 @@ export type AudioPref = 'opus' | 'm4a';
 const MAX_URL_AGE_MS = 5 * 60 * 60 * 1000; // 5 giờ
 /** Mỗi lần gọi googlevideo chỉ xin tối đa 2 MiB — xin cả file một lần thường bị bóp băng thông. */
 const UPSTREAM_CHUNK = 2 * 1024 * 1024;
-/** Range mở (bytes=N-) chỉ trả tối đa 8 MiB; trình duyệt sẽ tự xin tiếp phần còn lại. */
-const MAX_OPEN_RANGE = 8 * 1024 * 1024;
+/**
+ * Range mở (bytes=N-) chỉ trả tối đa 8 MiB (Vercel: 4 MiB, dưới giới hạn 4,5 MB mỗi response);
+ * trình duyệt sẽ tự xin tiếp phần còn lại.
+ */
+const MAX_OPEN_RANGE = (isVercel ? 4 : 8) * 1024 * 1024;
 /** Vị trí byte dùng để kiểm tra URL (sau giới hạn ~1 MB khi thiếu PO token). */
 const PROBE_OFFSET = 1_200_000;
 
+export interface CachedStream {
+  url: string;
+  mimeType: string;
+  contentLength?: number;
+  expiresAt: number;
+}
+
+/** Cache URL đã decipher trong bộ nhớ của instance (tối đa 5 giờ, theo tham số expire của URL). */
 const memory = new TtlCache<CachedStream>(500);
 const inflight = new Map<string, Promise<CachedStream>>();
 
@@ -121,18 +131,8 @@ export async function resolveStream(
   if (!force) {
     const hit = memory.get(key);
     if (hit) return { ...hit, fresh: false };
-    try {
-      const stored = await getStreamCache(key);
-      if (stored) {
-        memory.set(key, stored, stored.expiresAt - Date.now());
-        return { ...stored, fresh: false };
-      }
-    } catch (err) {
-      console.warn('Không đọc được stream_cache:', describe(err));
-    }
   } else {
     memory.delete(key);
-    await deleteStreamCache(key).catch(() => {});
   }
 
   // Gộp các request đồng thời cho cùng một bài.
@@ -143,7 +143,6 @@ export async function resolveStream(
   }
   const fresh = await pending;
   memory.set(key, fresh, fresh.expiresAt - Date.now());
-  await setStreamCache(key, fresh).catch((err: unknown) => console.warn('Không ghi được stream_cache:', describe(err)));
   return { ...fresh, fresh: true };
 }
 
@@ -198,24 +197,12 @@ async function downloadChunk(url: string, start: number, end: number, lenient = 
   }
 }
 
-/**
- * Proxy audio về client, hỗ trợ Range.
- * @param redirectWhenFresh Supabase Edge giới hạn CPU theo isolate: nếu vừa decipher (nặng) thì trả 307 về
- *   chính URL này để việc stream (kéo dài) diễn ra ở request sau, lúc URL đã nằm sẵn trong cache Postgres.
- */
-export async function proxyStream(
-  videoId: string,
-  pref: AudioPref,
-  rangeHeader: string | undefined,
-  redirectWhenFresh?: string,
-): Promise<Response> {
+/** Proxy audio về client, hỗ trợ Range. */
+export async function proxyStream(videoId: string, pref: AudioPref, rangeHeader: string | undefined): Promise<Response> {
   const range = parseRange(rangeHeader);
   if (range === 'invalid') return new Response(null, { status: 416 });
 
   const first = await resolveStream(videoId, pref);
-  if (first.fresh && redirectWhenFresh) {
-    return new Response(null, { status: 307, headers: { location: redirectWhenFresh, 'cache-control': 'no-store' } });
-  }
   let stream: CachedStream = first;
   let refreshed = false;
 

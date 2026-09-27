@@ -1,21 +1,10 @@
 import { Innertube, Log, Platform, UniversalCache } from 'youtubei.js';
 import type { Types } from 'youtubei.js';
-import { config, isDeno } from '../env.ts';
+import vm from 'node:vm';
+import { config } from '../env.ts';
 import { youtubeFetch } from '../lib/proxyFetch.ts';
 
 Log.setLevel(Log.Level.ERROR);
-
-type VmModule = { runInNewContext(code: string, context: object, options: { timeout: number }): unknown };
-let vm: Promise<VmModule | null> | undefined;
-
-/** node:vm chỉ có trên Node; Supabase Edge (Deno) không hỗ trợ nên dùng new Function. */
-function loadVm(): Promise<VmModule | null> {
-  if (isDeno) return Promise.resolve(null);
-  // Specifier tính lúc chạy để trình dựng module graph của Deno không cố phân giải "node:vm".
-  const specifier = ['node', 'vm'].join(':');
-  vm ??= import(/* @vite-ignore */ specifier).then((m: { default?: VmModule } & VmModule) => m.default ?? m).catch(() => null);
-  return vm;
-}
 
 /**
  * Trình thông dịch JS cho youtubei.js (xem "Providing a Custom JavaScript Interpreter").
@@ -26,9 +15,8 @@ async function evaluate(data: Types.BuildScriptResult): Promise<Types.EvalResult
   const code = `(function () {
 ${data.output}
 })()`;
-  const nodeVm = await loadVm();
-  if (nodeVm) return nodeVm.runInNewContext(code, Object.create(null), { timeout: 5000 }) as Types.EvalResult;
-  return new Function(`return ${code}`)() as Types.EvalResult;
+  // Chạy trong context riêng của node:vm, có timeout.
+  return vm.runInNewContext(code, Object.create(null), { timeout: 5000 }) as Types.EvalResult;
 }
 
 Platform.shim.eval = evaluate;

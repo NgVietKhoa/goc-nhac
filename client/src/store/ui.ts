@@ -12,6 +12,8 @@ export interface TrackMenuState {
 }
 
 interface UiState {
+  /** Server có đặt APP_PASSWORD (hiện nút "Khóa ứng dụng"). */
+  authRequired: boolean;
   queueOpen: boolean;
   nowPlayingOpen: boolean;
   menu: TrackMenuState | null;
@@ -28,6 +30,7 @@ interface UiState {
 const wideScreen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1200px)').matches;
 
 export const useUi = create<UiState>()((set) => ({
+  authRequired: false,
   queueOpen: wideScreen(),
   nowPlayingOpen: false,
   menu: null,

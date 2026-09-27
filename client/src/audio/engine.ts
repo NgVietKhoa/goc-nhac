@@ -1,6 +1,7 @@
 // Điều khiển phát nhạc: đồng bộ store Zustand với 2 thẻ <audio> (1 đang phát, 1 tải trước bài kế).
 import { api, streamError, streamUrl } from '../lib/api.ts';
 import { img, trackSubtitle } from '../lib/format.ts';
+import { useLibrary } from '../store/library.ts';
 import { currentItem, loadPosition, savePosition, usePlayback, usePlayer, type QueueItem } from '../store/player.ts';
 import { toast } from '../store/toast.ts';
 import type { Track } from '../types.ts';
@@ -290,9 +291,7 @@ class AudioEngine {
     if (!item) return;
     if (!this.historySent && this.listened >= HISTORY_AFTER_SEC) {
       this.historySent = true;
-      api.addHistory(item.track, Math.round(this.listened)).catch(() => {
-        this.historySent = false;
-      });
+      useLibrary.getState().addHistory(item.track, this.listened);
     }
     const now = Date.now();
     if (now - this.lastSave > 5000) {
