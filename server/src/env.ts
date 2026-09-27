@@ -31,6 +31,8 @@ export interface AppConfig {
     proxy?: string;
     /** true: mọi request (cả tìm kiếm, album…) đều qua proxy; false: chỉ lấy link + tải audio. */
     proxyAll: boolean;
+    /** Tự sinh PO token bằng BotGuard (mặc định bật; tắt: YT_PO_AUTO=0). */
+    poAuto: boolean;
   };
 }
 
@@ -55,6 +57,7 @@ export function config(): AppConfig {
       clients: list('YT_CLIENTS', ['VISIONOS', 'YTMUSIC', 'ANDROID_VR', 'IOS', 'MWEB']),
       proxy: read('YT_PROXY'),
       proxyAll: ['1', 'true', 'yes'].includes((read('YT_PROXY_ALL') ?? '').toLowerCase()),
+      poAuto: !['0', 'false', 'no'].includes((read('YT_PO_AUTO') ?? '').toLowerCase()),
     },
   };
   return cached;

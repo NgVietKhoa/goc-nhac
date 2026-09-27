@@ -3,7 +3,7 @@
 //   .vercel/output/functions/api.func ← backend Hono đóng gói bằng esbuild (Node)
 //   .vercel/output/config.json       ← định tuyến: file tĩnh → /api/* → SPA
 import { execSync } from 'node:child_process';
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import fs, { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -19,6 +19,17 @@ console.log('▶ Build giao diện');
 execSync('npm run build -w client', { cwd: root, stdio: 'inherit' });
 cpSync(path.join(root, 'client/dist'), path.join(out, 'static'), { recursive: true });
 
+const jsdomPatchPlugin = {
+  name: 'jsdom-patch',
+  setup(b) {
+    b.onLoad({ filter: /XMLHttpRequest-impl\.js$/ }, async (args) => {
+      let contents = await fs.promises.readFile(args.path, 'utf8');
+      contents = contents.replace('require.resolve("./xhr-sync-worker.js")', 'null');
+      return { contents, loader: 'js' };
+    });
+  },
+};
+
 console.log('▶ Đóng gói backend');
 await build({
   entryPoints: [path.join(root, 'server/vercel-function.ts')],
@@ -30,9 +41,14 @@ await build({
   minify: false,
   sourcemap: false,
   logLevel: 'warning',
+  // jsdom có require tùy chọn tới "canvas" (không cần cho BotGuard) → để external.
+  external: ['canvas'],
+  plugins: [jsdomPatchPlugin],
   // Một số thư viện CommonJS gọi require() → cung cấp require trong bản ESM.
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
 });
+
+writeFileSync(path.join(fn, 'xhr-sync-worker.js'), 'export {};\n');
 
 writeFileSync(
   path.join(fn, '.vc-config.json'),

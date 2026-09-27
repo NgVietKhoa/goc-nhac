@@ -4,7 +4,7 @@ import { AppError, badRequest } from './errors.ts';
 import { endSession, hasSession, passwordMatches, rateLimit, startSession } from './middleware.ts';
 import * as v from './validate.ts';
 import * as yt from './youtube/service.ts';
-import { proxyStream, type AudioPref } from './youtube/stream.ts';
+import { diagnoseStream, proxyStream, type AudioPref } from './youtube/stream.ts';
 
 async function jsonBody(req: { json(): Promise<unknown> }): Promise<Record<string, unknown>> {
   try {
@@ -83,6 +83,12 @@ export const music = new Hono()
     const id = v.videoId(c.req.param('videoId'));
     const pref: AudioPref = c.req.query('format') === 'm4a' ? 'm4a' : 'opus';
     return proxyStream(id, pref, c.req.header('range'));
+  })
+  .get('/debug/stream', rateLimit('debug', 5), async (c) => {
+    // Chẩn đoán vì sao không phát được: thử mọi client InnerTube trên máy chủ hiện tại.
+    const id = v.videoId(c.req.query('v') ?? 'qHpE45b4INk');
+    c.header('cache-control', 'no-store');
+    return c.json(await diagnoseStream(id));
   })
   .get('/image', async (c) => {
     // Proxy ảnh bìa để trình duyệt đọc được pixel (lấy màu chủ đạo) mà không vướng CORS.

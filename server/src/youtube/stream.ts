@@ -5,6 +5,7 @@ import { config, isVercel } from '../env.ts';
 import { TtlCache } from '../lib/ttlCache.ts';
 import { youtubeFetch } from '../lib/proxyFetch.ts';
 import { getPlayerYT, resetYT } from './client.ts';
+import { contentPoToken, lastPoError, poAutoEnabled } from './poToken.ts';
 
 export type AudioPref = 'opus' | 'm4a';
 
@@ -59,12 +60,13 @@ function describe(err: unknown): string {
 
 async function fetchFresh(videoId: string, pref: AudioPref): Promise<CachedStream> {
   const yt = await getPlayerYT();
+  const poToken = await contentPoToken(yt, videoId);
   let lastError: AppError | undefined;
   let playerBroken = false;
 
   for (const client of config().yt.clients) {
     try {
-      const info = await yt.getBasicInfo(videoId, { client: client as Types.InnerTubeClient });
+      const info = await yt.getBasicInfo(videoId, { client: client as Types.InnerTubeClient, po_token: poToken });
       const status = info.playability_status?.status;
       if (status && status !== 'OK') {
         const err = playabilityError(status, info.playability_status?.reason);
@@ -275,4 +277,53 @@ export async function proxyStream(videoId: string, pref: AudioPref, rangeHeader:
   });
   if (range) headers.set('content-range', `bytes ${start}-${end}/${total}`);
   return new Response(body, { status: range ? 206 : 200, headers });
+}
+
+// ---------- Chẩn đoán ----------
+
+const DIAG_CLIENTS = ['VISIONOS', 'YTMUSIC', 'MWEB', 'WEB', 'IOS', 'ANDROID_VR', 'TV', 'TV_SIMPLY', 'WEB_EMBEDDED'];
+
+/** Thử mọi client (có / không PO token) để biết tổ hợp nào lấy được audio trên máy chủ hiện tại. */
+export async function diagnoseStream(videoId: string) {
+  const started = Date.now();
+  const yt = await getPlayerYT();
+  const fetchFn = await youtubeFetch();
+  const ip = await fetchFn('https://api.ipify.org?format=json')
+    .then((r) => r.json() as Promise<{ ip?: string }>)
+    .then((d) => d.ip)
+    .catch(() => undefined);
+  const po = await contentPoToken(yt, videoId);
+  const results: Record<string, string>[] = [];
+  const clients = [...new Set([...config().yt.clients, ...DIAG_CLIENTS])];
+  for (const client of clients) {
+    for (const withPo of po ? [false, true] : [false]) {
+      const row: Record<string, string> = { client, po: withPo ? 'có' : 'không' };
+      try {
+        const info = await yt.getBasicInfo(videoId, { client: client as Types.InnerTubeClient, po_token: withPo ? po : undefined });
+        row.status = info.playability_status?.status ?? '?';
+        if (info.playability_status?.reason) row.reason = info.playability_status.reason.slice(0, 120);
+        const format = pickAudioFormat(info.streaming_data?.adaptive_formats ?? [], 'opus');
+        if (format) {
+          row.itag = String(format.itag);
+          const url = await format.decipher(yt.session.player);
+          const at = format.content_length && format.content_length > PROBE_OFFSET ? PROBE_OFFSET : 0;
+          const probe = await fetchFn(url, { headers: { range: `bytes=${at}-${at}` } });
+          await probe.body?.cancel();
+          row.audio = probe.status === 206 || probe.status === 200 ? `OK (${probe.status})` : `HTTP ${probe.status}`;
+        }
+      } catch (err) {
+        row.error = describe(err).slice(0, 160);
+      }
+      results.push(row);
+    }
+  }
+  return {
+    videoId,
+    serverIp: ip,
+    proxy: Boolean(config().yt.proxy),
+    poToken: po ? 'đã sinh' : poAutoEnabled() ? `lỗi: ${lastPoError ?? '?'}` : 'tắt',
+    ms: Date.now() - started,
+    works: results.filter((r) => r.audio?.startsWith('OK')).map((r) => `${r.client}${r.po === 'có' ? '+po' : ''}`),
+    results,
+  };
 }
