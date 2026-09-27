@@ -72,7 +72,7 @@ curl -o /dev/null -D - -H 'Range: bytes=2000000-' localhost:3001/api/stream/qHpE
 4. Deploy. Mở `https://<domain>.vercel.app/api/health` phải thấy `{"ok":true}`.
 5. Nên đổi **Function Region** sang Singapore (`sin1`) cho gần Việt Nam: Project Settings → Functions → Function Region.
 
-Cách build: `scripts/build-vercel.mjs` build giao diện rồi dùng esbuild đóng gói backend (`server/vercel.ts`) thành
+Cách build: `scripts/build-vercel.mjs` build giao diện rồi dùng esbuild đóng gói backend (`server/vercel-function.ts`) thành
 `.vercel/output/functions/api.func` theo [Build Output API](https://vercel.com/docs/build-output-api/v3). Thử build trên máy: `node scripts/build-vercel.mjs`.
 
 Giới hạn cần biết của Vercel:
@@ -151,7 +151,7 @@ Khi player mới của YouTube làm hỏng decipher (log có "Failed to extract 
 vercel.json                  # build bằng scripts/build-vercel.mjs
 scripts/build-vercel.mjs     # giao diện → .vercel/output/static, backend → .vercel/output/functions/api.func
 server/
-  vercel.ts                  # điểm vào Vercel Function
+  vercel-function.ts         # điểm vào Vercel Function
   node.ts                    # chạy API bằng Node (dev / Docker)
   src/
     app.ts  routes.ts  middleware.ts  validate.ts  env.ts  errors.ts

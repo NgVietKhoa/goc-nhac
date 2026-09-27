@@ -21,7 +21,7 @@ cpSync(path.join(root, 'client/dist'), path.join(out, 'static'), { recursive: tr
 
 console.log('▶ Đóng gói backend');
 await build({
-  entryPoints: [path.join(root, 'server/vercel.ts')],
+  entryPoints: [path.join(root, 'server/vercel-function.ts')],
   outfile: path.join(fn, 'index.mjs'),
   bundle: true,
   platform: 'node',
