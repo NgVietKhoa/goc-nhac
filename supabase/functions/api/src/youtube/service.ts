@@ -94,7 +94,12 @@ export async function search(query: string, type: SearchType | 'all'): Promise<S
       return { type: 'all', result };
     }
 
-    const items = shelves.flatMap((s) => [...(s.contents ?? [])]).map(shelfItem).filter((x): x is ShelfItem => !!x);
+    let items = shelves.flatMap((s) => [...(s.contents ?? [])]).map(shelfItem).filter((x): x is ShelfItem => !!x);
+    if (items.length === 0) {
+      // Từ một số IP/khu vực, YouTube trả trang lọc với cấu trúc khác → lấy từ kết quả tổng hợp.
+      const all = await yt.music.search(query, { type: 'all' });
+      items = (all.contents ?? []).flatMap((s) => [...(s.contents ?? [])]).map(shelfItem).filter((x): x is ShelfItem => !!x);
+    }
     switch (type) {
       case 'song':
         return { type, items: items.flatMap((i) => (i.kind === 'song' ? [i.track] : [])) };

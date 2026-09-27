@@ -1,6 +1,7 @@
 import { Innertube, Log, Platform, UniversalCache } from 'youtubei.js';
 import type { Types } from 'youtubei.js';
 import { config, isDeno } from '../env.ts';
+import { youtubeFetch } from '../lib/proxyFetch.ts';
 
 Log.setLevel(Log.Level.ERROR);
 
@@ -35,9 +36,12 @@ Platform.shim.eval = evaluate;
 let browseInstance: Promise<Innertube> | undefined;
 let playerInstance: Promise<Innertube> | undefined;
 
-function create(withPlayer: boolean): Promise<Innertube> {
+async function create(withPlayer: boolean): Promise<Innertube> {
   const { yt, cacheDir } = config();
+  // Instance lấy link audio luôn đi qua proxy (nếu có); instance duyệt nhạc chỉ khi YT_PROXY_ALL.
+  const useProxy = yt.proxy && (withPlayer || yt.proxyAll);
   return Innertube.create({
+    fetch: useProxy ? await youtubeFetch() : undefined,
     lang: 'vi',
     location: 'VN',
     enable_session_cache: true,

@@ -4,6 +4,7 @@ import { deleteStreamCache, getStreamCache, setStreamCache, type CachedStream } 
 import { AppError, playabilityError } from '../errors.ts';
 import { config } from '../env.ts';
 import { TtlCache } from '../lib/ttlCache.ts';
+import { youtubeFetch } from '../lib/proxyFetch.ts';
 import { getPlayerYT, resetYT } from './client.ts';
 
 export type AudioPref = 'opus' | 'm4a';
@@ -78,7 +79,7 @@ async function fetchFresh(videoId: string, pref: AudioPref): Promise<CachedStrea
       // Kiểm tra URL thật sự tải được. Thiếu PO token, googlevideo vẫn cho tải ~1 MB đầu rồi trả 403,
       // nên phải thử đọc một byte nằm sau mốc đó.
       const probeAt = format.content_length && format.content_length > PROBE_OFFSET ? PROBE_OFFSET : 0;
-      const probe = await fetch(url, { headers: { range: `bytes=${probeAt}-${probeAt}` } });
+      const probe = await (await youtubeFetch())(url, { headers: { range: `bytes=${probeAt}-${probeAt}` } });
       await probe.body?.cancel();
       if (probe.status !== 206 && probe.status !== 200) {
         lastError ??= new AppError('UPSTREAM', `YouTube từ chối luồng audio (${client}: HTTP ${probe.status}).`, 502);
@@ -180,7 +181,7 @@ async function downloadChunk(url: string, start: number, end: number, lenient = 
   const timeoutMs = Math.round(3000 + (size / (lenient ? SLOW_BYTES_PER_SEC : MIN_BYTES_PER_SEC)) * 1000);
   let res: Response;
   try {
-    res = await fetch(url, { headers: { range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(timeoutMs) });
+    res = await (await youtubeFetch())(url, { headers: { range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
     throw new ChunkError(`không tải được đoạn ${start}-${end}: ${describe(err)}`);
   }
@@ -237,7 +238,7 @@ export async function proxyStream(
   let total = stream.contentLength;
   if (total === undefined) {
     // Hiếm gặp: YouTube không báo kích thước → hỏi bằng một request 1 byte.
-    const probe = await fetch(stream.url, { headers: { range: 'bytes=0-0' } });
+    const probe = await (await youtubeFetch())(stream.url, { headers: { range: 'bytes=0-0' } });
     await probe.body?.cancel();
     total = Number(probe.headers.get('content-range')?.split('/')[1]);
     if (!Number.isFinite(total)) throw new AppError('UPSTREAM', 'Không xác định được kích thước file audio.', 502);

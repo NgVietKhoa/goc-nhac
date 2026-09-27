@@ -35,6 +35,10 @@ export interface AppConfig {
     playerId?: string;
     /** Thứ tự client InnerTube thử khi lấy stream (client đầu tiên tải được trọn bài sẽ được dùng). */
     clients: string[];
+    /** Proxy cho request tới YouTube, vd http://user:pass@host:port hoặc socks5://host:port. */
+    proxy?: string;
+    /** true: mọi request (cả tìm kiếm, album…) đều qua proxy; false: chỉ lấy link + tải audio. */
+    proxyAll: boolean;
   };
 }
 
@@ -56,6 +60,8 @@ export function config(): AppConfig {
       visitorData: read('YT_VISITOR_DATA'),
       playerId: read('YT_PLAYER_ID'),
       clients: list('YT_CLIENTS', ['VISIONOS', 'YTMUSIC', 'ANDROID_VR', 'IOS', 'MWEB']),
+      proxy: read('YT_PROXY'),
+      proxyAll: ['1', 'true', 'yes'].includes((read('YT_PROXY_ALL') ?? '').toLowerCase()),
     },
   };
   return cached;

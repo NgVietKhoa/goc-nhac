@@ -12,8 +12,9 @@
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.9",
     "postgres": "^3.4.9",
-    "youtubei.js": "^18.1.0",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "undici": "^6.29.0",
+    "youtubei.js": "^18.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

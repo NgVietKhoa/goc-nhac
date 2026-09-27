@@ -163,7 +163,19 @@ npx supabase functions deploy api --no-verify-jwt
 
 Sau đó xóa cache URL cũ (SQL Editor): `delete from goc_nhac.stream_cache;`
 
-### 6.2. Đổi thứ tự client InnerTube
+### 6.2. YouTube chặn IP máy chủ → dùng proxy
+
+Trên Supabase (IP datacenter), YouTube thường chặn đúng request lấy link audio (`/youtubei/v1/player` trả 403, hoặc báo nghi là bot). Tìm kiếm, album, nghệ sĩ vẫn chạy. Cách xử lý: cho request lấy link và tải audio đi qua một proxy (nên là proxy dân dụng hoặc proxy Việt Nam):
+
+```bash
+npx supabase secrets set YT_PROXY='http://user:pass@host:port'   # hỗ trợ http://, https://, socks5://
+# Tùy chọn: cho cả tìm kiếm/album… đi qua proxy
+npx supabase secrets set YT_PROXY_ALL=1
+```
+
+Secret có hiệu lực ngay, không cần deploy lại. Mỗi bài tiêu tốn khoảng 4–5 MB băng thông proxy. Nhớ xóa cache URL cũ (`delete from goc_nhac.stream_cache;`) vì link lấy qua IP khác có thể không dùng được.
+
+### 6.3. Đổi thứ tự client InnerTube
 
 Không có PO token thì YouTube chỉ cho tải khoảng 1 MB đầu với hầu hết client. Ở thời điểm viết (09/2026), `VISIONOS` vẫn tải được trọn bài nên được thử đầu tiên. Nếu nó hỏng, hãy đổi thứ tự:
 
@@ -173,7 +185,7 @@ npx supabase secrets set YT_CLIENTS=YTMUSIC,ANDROID_VR,IOS,MWEB,VISIONOS
 
 Các giá trị hợp lệ nằm trong `InnerTubeClient` của youtubei.js (`IOS`, `WEB`, `MWEB`, `ANDROID`, `ANDROID_VR`, `VISIONOS`, `YTMUSIC`, `TV`, `TV_SIMPLY`, `WEB_EMBEDDED`…). Server tự thử lần lượt và kiểm tra thật sự tải được byte sau mốc 1 MB rồi mới dùng.
 
-### 6.3. Đặt PO token
+### 6.4. Đặt PO token
 
 Khi gặp lỗi `BOT_CHECK` ("chặn vì nghi là bot") hoặc mọi client đều bị 403:
 
@@ -188,7 +200,7 @@ Khi gặp lỗi `BOT_CHECK` ("chặn vì nghi là bot") hoặc mọi client đ�
 
 PO token có hạn dùng (vài giờ đến vài ngày) và gắn với visitor data. Nếu cần chạy lâu dài, hãy dùng công cụ sinh token tự động (xem [hướng dẫn PO token của youtubei.js](https://ytjs.dev/guide/)).
 
-### 6.4. Ghim `YT_PLAYER_ID`
+### 6.5. Ghim `YT_PLAYER_ID`
 
 Nếu player mới của YouTube làm hỏng việc decipher (log có "Failed to extract n/sig decipher function", hoặc URL bị 403 ngay từ đầu), hãy ghim một player cũ còn chạy:
 
