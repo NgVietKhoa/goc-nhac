@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR_PROJECT_REF.supabase.co/functions/v1/api/:path*"
+      "destination": "https://yrzvinqceijsxlkonqoq.supabase.co/functions/v1/api/:path*"
     },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

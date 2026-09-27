@@ -112,7 +112,7 @@ Cần [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g supabase`,
 
 ## 3. Deploy: frontend lên Vercel
 
-1. Sửa `client/vercel.json`: thay `YOUR_PROJECT_REF` bằng project ref của bạn.
+1. `client/vercel.json` phải trỏ đúng project ref của bạn (hiện là `yrzvinqceijsxlkonqoq`; đổi nếu dùng project khác).
 2. Trên Vercel: **Add New → Project**, chọn repo, đặt **Root Directory = `client`**. Framework Vite được nhận tự động, không cần biến môi trường.
 3. Deploy, rồi mở domain `*.vercel.app` và nhập mật khẩu.
 
